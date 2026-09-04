@@ -1808,3 +1808,764 @@ CONVERT TO LOCAL FIAT
        ↓
 MODULE 3
 PAYOUT
+
+GANESHA'S SUMMARY OF MODULE 2--
+# Module 2 — Custodial Wallet, Crypto Settlement & Liquidity
+
+## Objective
+
+Module 2 starts after Module 1 has successfully verified the sender's
+real-money payment.
+
+Its main objective is to:
+
+Payment Verified
+        ↓
+Convert the verified value into a settlement asset
+        ↓
+Manage liquidity
+        ↓
+Settle through crypto infrastructure
+        ↓
+Represent the value in the TransNova custodial wallet
+        ↓
+Allow Hold / Receive / Transfer
+        ↓
+Convert stablecoin into required fiat
+        ↓
+READY_FOR_PAYOUT
+
+Crypto settlement and final local-currency payout are separate.
+
+Module 2 ends at:
+
+READY_FOR_PAYOUT
+
+Module 3 then performs the final local payout.
+1. Core Idea
+MODULE 1
+Payment Collection & Verification
+        ↓
+PAYMENT_VERIFIED
+        ↓
+READY_FOR_SETTLEMENT
+        ↓
+MODULE 2
+Crypto Settlement
+        ↓
+Liquidity
+        ↓
+Conversion
+        ↓
+Stablecoin
+        ↓
+Custodial Wallet
+        ↓
+Hold / Receive / Transfer
+        ↓
+Stablecoin → Fiat
+        ↓
+READY_FOR_PAYOUT
+        ↓
+MODULE 3
+Local Payout
+
+The key idea is that TransNova itself is not an exchange or a bank.
+
+TransNova acts as the orchestrator that coordinates:
+
+Payment providers
+Crypto/settlement providers
+Liquidity
+Conversion
+Custody
+Payout providers
+
+For the POC, Crypto.com is the primary crypto/settlement infrastructure provider, but it is accessed through a SettlementProvider interface and CryptoComAdapter.
+
+This means Crypto.com can be replaced later without rewriting the entire TransNova system.
+
+2. What the User Sees
+
+The user should see a simple TransNova wallet:
+
+TRANSNOVA WALLET
+
+USDC
+1,250.00
+
+USDT
+500.00
+
+INR
+₹5,000
+
+---------------------
+Add Money | Send | Withdraw
+
+The user should not see technical infrastructure such as:
+
+API Keys
+Private Keys
+Blockchain RPC
+Liquidity Provider
+Settlement Account
+Custody Vault
+FX Provider
+
+All of these are backend responsibilities.
+
+3. Custodial Wallet
+
+Each TransNova user has a wallet account managed by TransNova.
+
+Conceptually:
+
+USER
+  ↓
+TRANSNOVA WALLET
+  ├── USDC Account
+  ├── USDT Account
+  └── Fiat Account(s)
+
+There are two important layers:
+
+User Wallet
+     ↓
+TransNova Ledger
+     ↓
+Custody / Provider
+     ↓
+Actual Assets
+
+The TransNova ledger records what the user owns, while the custody/provider layer represents the actual assets controlled through external infrastructure.
+
+This separation allows TransNova to reconcile its internal records with the actual assets held externally.
+
+4. Wallet Database
+
+Important tables:
+
+wallets
+wallet_balances
+wallet_transactions
+ledger_entries
+
+A wallet balance should contain:
+
+AVAILABLE
+RESERVED
+PENDING
+
+Example:
+
+USDC
+
+Available: 500
+Reserved: 50
+Pending: 0
+
+This prevents double spending and allows the system to safely handle transactions that are still processing.
+
+5. Asset Model
+
+TransNova should not be designed around only one cryptocurrency.
+
+Instead, create a general asset model:
+
+Asset
+ ├── asset_id
+ ├── symbol
+ ├── type
+ ├── network
+ ├── decimals
+ └── status
+
+For the initial POC:
+
+USDC
+USDT
+
+can be the supported stablecoins.
+
+6. How Module 2 Starts
+
+Example:
+
+Ganesha
+India
+
+₹10,000
+   ↓
+Module 1
+   ↓
+Payment Provider
+   ↓
+Payment Verification
+   ↓
+PAYMENT_VERIFIED
+   ↓
+READY_FOR_SETTLEMENT
+
+Now Module 2 takes over.
+
+TransNova creates a settlement instruction:
+
+Transaction ID: TXN001
+Source: INR
+Source Amount: ₹10,000
+Settlement Asset: USDC
+Destination Currency: USD
+Recipient: Rishu
+Status: CREATED
+
+Then the system obtains a quote to determine how much settlement asset is required.
+
+7. Conversion vs Settlement
+
+These are two different concepts.
+
+Conversion
+
+Changing one asset into another:
+
+INR → USDC
+Settlement
+
+Actually completing the value movement and recording it as settled.
+
+Therefore:
+
+Quote
+  ↓
+Conversion
+  ↓
+Settlement
+  ↓
+Custody
+  ↓
+Wallet Credit
+
+The POC should keep these as separate backend services even if an external provider performs several steps internally.
+
+8. Liquidity Engine
+
+Before converting money, TransNova checks whether enough settlement liquidity is available.
+
+Example:
+
+Required: 114.45 USDC
+
+Available?
+    ↓
+   YES
+    ↓
+LIQUIDITY_CONFIRMED
+
+If insufficient:
+
+LIQUIDITY_INSUFFICIENT
+        ↓
+Find another route/provider
+        ↓
+Retry
+
+This becomes extremely important when transaction volume increases.
+
+For example:
+
+1,000 users
+×
+$1,000 each
+=
+$1,000,000
+
+TransNova needs access to approximately $1M of settlement liquidity or an appropriate settlement route.
+
+9. Crypto.com Integration
+
+The POC uses:
+
+TransNova
+    ↓
+SettlementProvider
+    ↓
+CryptoComSettlementAdapter
+    ↓
+Crypto.com API
+
+The adapter handles things such as:
+
+Authentication
+Quote requests
+Trading / Conversion
+Order creation
+Order status
+Wallet information
+Fiat operations where applicable
+Provider transaction IDs
+Provider errors
+Webhook processing
+
+This keeps Crypto.com's implementation details outside the core TransNova application.
+
+10. API Security
+
+Crypto.com API credentials must never be placed in the frontend.
+
+Wrong:
+
+React App
+    ↓
+Crypto.com API
+
+Correct:
+
+React App
+    ↓
+TransNova Backend
+    ↓
+CryptoComAdapter
+    ↓
+Crypto.com
+
+API credentials should remain on the backend:
+
+CRYPTOCOM_API_KEY
+CRYPTOCOM_SECRET_KEY
+
+The architecture should also use:
+
+IP whitelisting
+Minimum required permissions
+Separate UAT credentials
+Separate production credentials
+
+The source specifically emphasizes that secret keys must not be exposed in client-side code.
+
+11. Main Crypto Settlement Flow
+
+The POC flow is:
+
+READY_FOR_SETTLEMENT
+        ↓
+Create Settlement
+        ↓
+Request Crypto.com Quote
+        ↓
+Receive Quote
+        ↓
+Calculate Amount + Fees
+        ↓
+Authorize Transaction
+        ↓
+Execute Conversion / Trade
+        ↓
+Check Order Status
+        ↓
+Stablecoin Acquired
+        ↓
+Custody / Wallet Update
+        ↓
+Ledger Update
+        ↓
+READY_FOR_PAYOUT
+
+The exact Crypto.com product/API used in production depends on account type, jurisdiction and commercial access.
+
+12. Wallet Credit
+
+Suppose the settlement produces:
+
+114.45 USDC
+
+TransNova should not immediately credit the user's wallet merely because an API request was sent.
+
+Instead:
+
+Settlement Request
+        ↓
+Provider Confirmation
+        ↓
+Custody Confirmation
+        ↓
+Ledger Credit
+        ↓
+AVAILABLE
+
+This prevents phantom balances — balances shown to users even though the underlying asset has not actually been confirmed.
+
+13. Internal Wallet Transfer
+
+If both users are TransNova users:
+
+Ganesha
+1,000 USDC
+   ↓
+Send 100 USDC
+   ↓
+TransNova Ledger
+   ↓
+Rishu
++100 USDC
+
+The backend performs:
+
+Authentication
+      ↓
+Recipient Validation
+      ↓
+Balance Check
+      ↓
+Risk / Limit Check
+      ↓
+Reserve Funds
+      ↓
+Debit Sender
+      ↓
+Credit Receiver
+      ↓
+Ledger Entries
+      ↓
+Completed
+
+No blockchain transaction is necessarily required for an internal TransNova transfer.
+
+Why this is important
+
+Internal transfers can be:
+
+Faster
+Cheaper
+Free from blockchain confirmation delays
+Free from blockchain gas/network fees for each internal transfer
+
+The actual underlying assets remain under the custody arrangement.
+
+14. External Blockchain Transfer
+
+This is different from an internal transfer.
+
+TransNova
+    ↓
+Custody
+    ↓
+Blockchain
+    ↓
+External Wallet
+
+This can involve:
+
+Blockchain Fee
+Network Delay
+Confirmation
+Address Validation
+
+For the first POC, external blockchain withdrawals should not be implemented.
+
+15. Withdrawal / Cash-Out
+
+Suppose Rishu has:
+
+300 USDC
+
+and wants:
+
+100 USDC → USD
+
+The flow is:
+
+Withdrawal Request
+        ↓
+Balance Check
+        ↓
+Reserve 100 USDC
+        ↓
+USDC → USD
+        ↓
+Settlement
+        ↓
+READY_FOR_PAYOUT
+
+Module 3 then takes over and delivers the USD through the appropriate local payout rail.
+
+16. Fee Architecture
+
+TransNova must calculate the complete cost, not just the crypto provider's fee.
+
+TOTAL COST =
+Payment Fee
++
+FX Spread
++
+Crypto Conversion Fee
++
+Settlement Fee
++
+Custody Fee
++
+Blockchain Fee
++
+Payout Fee
++
+TransNova Fee
+
+Some of these can be zero depending on the selected route.
+
+The important point is that TransNova should dynamically calculate the actual route cost rather than hard-coding a single percentage.
+
+17. Cost Engine
+
+Create a:
+
+CostEngine
+
+It receives:
+
+Source Currency
+Source Amount
+Destination Currency
+Settlement Asset
+Payment Provider
+Settlement Provider
+Payout Provider
+
+and produces:
+
+Provider Fee
+Conversion Cost
+Settlement Cost
+Custody Cost
+Payout Cost
+TransNova Fee
+Total Cost
+
+This allows TransNova to show the customer a transparent final price.
+
+18. Route Optimization
+
+This is one of the most important parts of TransNova.
+
+Suppose:
+
+Route A → Crypto.com → ₹180
+
+Route B → Provider B → ₹145
+
+Route C → Provider C → ₹210
+
+TransNova should choose Route B if it satisfies:
+
+Compliance
+Liquidity
+Speed
+Supported Currency
+Provider Availability
+Risk Rules
+
+Therefore:
+
+TransNova should not be Crypto.com-dependent. It should be Crypto.com-enabled.
+
+This makes the architecture provider-independent.
+
+19. Settlement State Machine
+
+The main settlement lifecycle is:
+
+READY_FOR_SETTLEMENT
+        ↓
+SETTLEMENT_CREATED
+        ↓
+QUOTE_REQUESTED
+        ↓
+QUOTE_RECEIVED
+        ↓
+LIQUIDITY_CHECKING
+        ↓
+LIQUIDITY_CONFIRMED
+        ↓
+CONVERSION_PROCESSING
+        ↓
+STABLECOIN_ACQUIRED
+        ↓
+CUSTODY_PROCESSING
+        ↓
+CUSTODY_CONFIRMED
+        ↓
+WALLET_CREDITED
+        ↓
+STABLECOIN_AVAILABLE
+        ↓
+READY_FOR_PAYOUT
+
+Possible failure states include:
+
+QUOTE_FAILED
+LIQUIDITY_FAILED
+CONVERSION_FAILED
+CUSTODY_FAILED
+SETTLEMENT_FAILED
+
+20. Webhooks & Idempotency
+
+Providers can send asynchronous updates.
+
+Therefore:
+
+Provider
+   ↓
+Webhook
+   ↓
+TransNova Webhook Endpoint
+   ↓
+Signature Verification
+   ↓
+Event ID Check
+   ↓
+Duplicate Check
+   ↓
+Transaction Update
+   ↓
+Ledger Update
+
+Never:
+
+Webhook
+   ↓
+Trust blindly
+   ↓
+Credit Wallet
+
+Every financial operation should also have an idempotency key so that repeated requests do not create duplicate financial operations.
+
+21. Reconciliation
+
+At the end of settlement:
+
+TransNova Ledger
+       │
+       ├── Settlement Records
+       │
+       └── Custody Records
+                 ↓
+           Reconciliation
+                 ↓
+          MATCH / MISMATCH
+
+Example:
+
+TransNova Ledger = 10,000 USDC
+Provider         = 10,000 USDC
+
+Result = RECONCILED
+
+If:
+
+Ledger   = 10,000
+Provider = 9,900
+
+then:
+
+RECONCILIATION_ALERT
+
+The system must never silently ignore such differences.
+
+22. Complete Module 2 Flow
+MODULE 1
+   ↓
+PAYMENT_VERIFIED
+   ↓
+READY_FOR_SETTLEMENT
+   ↓
+TRANSNOVA CORE ORCHESTRATOR
+   │
+   ├── Settlement Engine
+   ├── Liquidity Engine
+   └── Fee Engine
+          ↓
+CryptoComAdapter
+          ↓
+Crypto.com
+          ↓
+Convert / Trade / Custody
+          ↓
+STABLECOIN
+          ↓
+TRANSNOVA CUSTODIAL WALLET
+          │
+          ├── HOLD
+          ├── RECEIVE
+          └── TRANSFER
+                  ↓
+               WITHDRAW
+                  ↓
+           STABLECOIN → FIAT
+                  ↓
+           READY_FOR_PAYOUT
+                  ↓
+              MODULE 3
+
+This is the recommended final architecture in the module.
+
+23. What to Build First
+
+The POC should be developed in phases:
+
+Phase 1
+Wallet + Balance + Ledger
+
+        ↓
+
+Phase 2
+Deposit + Transfer + Withdrawal
+(using mock money)
+
+        ↓
+
+Phase 3
+Settlement + Liquidity + Conversion + Fees
+
+        ↓
+
+Phase 4
+Crypto.com UAT Integration
+
+        ↓
+
+Phase 5
+Provider Webhooks
+
+        ↓
+
+Phase 6
+Real Provider Integration
+
+Do not begin with real private keys, multiple blockchains, external wallet withdrawals, complex FX, or a large liquidity marketplace.
+
+24. Final Definition of Module 2
+
+Module 2 — Custodial Wallet, Crypto Settlement & Liquidity
+
+Module 2 begins after Module 1 verifies the source payment. TransNova acts as an orchestration layer that coordinates settlement, liquidity, conversion and custodial wallet operations through external providers. Verified fiat value is converted into a supported stablecoin such as USDC, settled through configured crypto infrastructure, and represented in the user's TransNova custodial wallet through an internal ledger. Users can hold, receive and transfer stablecoins, while withdrawal requests convert the stablecoin into the required fiat currency and end in READY_FOR_PAYOUT.
+
+In one sentence
+Module 2 takes VERIFIED MONEY from Module 1,
+converts and settles it into DIGITAL VALUE,
+manages that value through liquidity + custody + ledger,
+and converts it into FIAT so Module 3 can perform the final payout.
+The complete TransNova POC
+MODULE 1
+COLLECT + VERIFY
+        ↓
+MODULE 2
+SETTLE + LIQUIDITY + CONVERT
+        ↓
+CUSTODIAL WALLET
+        ↓
+HOLD + RECEIVE + TRANSFER
+        ↓
+CONVERT TO LOCAL FIAT
+        ↓
+MODULE 3
+PAYOUT

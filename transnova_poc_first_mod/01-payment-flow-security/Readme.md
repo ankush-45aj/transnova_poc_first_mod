@@ -851,3 +851,347 @@ MODULE 2
 liquidity process?"
 
 This makes Module 1 a complete and independent foundation for the rest of your TransNova POC.
+
+
+Ganesha's Summary of Mod 1
+# Module 1 — India-Side Payment Initiation & Verification
+
+## Objective
+
+Securely initiate and verify a real-money transaction from India and
+produce a trusted transaction that is ready for settlement.
+
+Crypto settlement and international payout happen in Module 2.
+
+---
+
+## Simple Flow
+
+Sender
+  ↓
+TransNova App
+  ↓
+Authentication
+  ↓
+Scan QR
+  ↓
+Recipient Resolution
+  ↓
+Quote
+  ↓
+KYC / Risk / Limits
+  ↓
+User Confirmation
+  ↓
+India Payment Provider
+  ↓
+Payment Verification
+  ↓
+READY_FOR_SETTLEMENT
+
+---
+
+## Main Components
+
+### 1. TransNova Identity
+
+A universal ID such as:
+
+TNV_8F92AB31
+
+identifies the recipient globally.
+
+---
+
+### 2. Payment Profile
+
+Maps the TransNova ID to the recipient's actual payment destination.
+
+Examples:
+
+India
+  → UPI / Bank payment profile
+
+USA
+  → USD bank payout profile
+
+Europe
+  → EUR / IBAN payout profile
+
+---
+
+### 3. QR Code
+
+The QR contains only a safe TransNova identifier/reference.
+
+Example:
+
+transnova://pay/TNV_8F92AB31
+
+It should NOT contain:
+
+- Bank account number
+- VPA credentials
+- API keys
+- Private keys
+- KYC documents
+- Sensitive financial information
+
+---
+
+### 4. Quote Engine
+
+Calculates:
+
+- INR amount
+- Transaction fee
+- FX rate
+- Recipient amount
+- Quote expiry
+
+Example:
+
+₹10,000
+  ↓
+Fee: ₹100
+  ↓
+FX conversion
+  ↓
+Recipient receives: $XXX
+
+The backend controls the final:
+
+- FX rate
+- Fee
+- Recipient amount
+- Settlement route
+
+---
+
+### 5. KYC / Risk / Limits
+
+Before payment, TransNova checks:
+
+- User authentication
+- User account status
+- KYC status
+- Transaction limits
+- Risk score
+- Compliance status
+
+Only if the checks pass:
+
+APPROVE
+  ↓
+Payment continues
+
+---
+
+### 6. Transaction Engine
+
+Creates and manages the transaction lifecycle.
+
+Example:
+
+CREATED
+  ↓
+RECIPIENT_VERIFIED
+  ↓
+QUOTE_CREATED
+  ↓
+RISK_CHECK_PENDING
+  ↓
+PAYMENT_AUTHORIZED
+  ↓
+PAYMENT_INITIATED
+  ↓
+PAYMENT_PROCESSING
+  ↓
+PAYMENT_VERIFICATION_PENDING
+  ↓
+PAYMENT_VERIFIED
+  ↓
+READY_FOR_SETTLEMENT
+
+---
+
+### 7. Payment Provider Adapter
+
+TransNova should not directly depend on one payment provider.
+
+Instead:
+
+Transaction Engine
+       ↓
+PaymentProvider Interface
+       ↓
++-----------------------+
+|                       |
+RazorpayAdapter    FutureProviderAdapter
+|                       |
++-----------------------+
+
+This allows TransNova to change or add payment providers without
+changing the core transaction engine.
+
+---
+
+### 8. Payment Verification
+
+The mobile application should NOT decide whether a payment was successful.
+
+Correct flow:
+
+Payment Initiated
+       ↓
+Payment Provider
+       ↓
+Provider API / Webhook
+       ↓
+Backend Verification
+       ↓
+Transaction State Updated
+       ↓
+PAYMENT_VERIFIED
+
+The backend is the source of truth.
+
+---
+
+### 9. Idempotency
+
+Prevents duplicate payments.
+
+Example:
+
+User presses PAY
+      ↓
+Network freezes
+      ↓
+User presses PAY again
+      ↓
+Same Idempotency Key
+      ↓
+Backend detects duplicate request
+      ↓
+Original transaction returned
+
+Result:
+
+10 duplicate requests
+        ↓
+1 financial transaction
+
+---
+
+## Security
+
+The system should include:
+
+- HTTPS / TLS
+- Authentication
+- Authorization
+- MFA where required
+- Rate limiting
+- Transaction limits
+- KYC / AML checks
+- Encryption
+- Role-Based Access Control (RBAC)
+- Audit logging
+- Secrets management
+- Transaction monitoring
+
+Production API credentials must remain on the backend.
+
+Never store them in:
+
+- Flutter application
+- Android APK
+- Frontend JavaScript
+- GitHub repository
+- QR code
+- README
+
+---
+
+## Database
+
+Important records include:
+
+users
+payment_identities
+payment_profiles
+quotes
+transactions
+transaction_events
+payment_attempts
+idempotency_keys
+webhook_events
+audit_logs
+
+---
+
+## Final Module 1 Flow
+
+SENDER 🇮🇳
+    ↓
+TRANSNOVA MOBILE APP
+    ↓
+Authentication
+    ↓
+Scan QR
+    ↓
+TransNova ID Resolution
+    ↓
+Recipient Verified
+    ↓
+Enter Amount
+    ↓
+FX Quote
+    ↓
+KYC / Risk / Limit Check
+    ↓
+Create Transaction
+    ↓
+Idempotency Protection
+    ↓
+User Confirmation
+    ↓
+India Payment Provider
+    ↓
+Real Payment Process
+    ↓
+Provider Webhook / API
+    ↓
+Backend Verification
+    ↓
+PAYMENT VERIFIED
+    ↓
+READY FOR SETTLEMENT
+    ↓
+MODULE 2
+
+---
+
+## Module Boundary
+
+### Module 1
+
+"Can TransNova securely identify users, resolve a recipient,
+create a transaction, collect and verify the source payment,
+and produce one trusted transaction ready for settlement?"
+
+        ↓
+
+### Module 2
+
+"How does that verified value enter the settlement,
+liquidity and international payout process?"
+
+---
+
+## One-Sentence Summary
+
+Module 1 securely converts a user's intention to pay into one
+verified INR transaction that TransNova can safely hand over
+to the international settlement system.
